@@ -1,0 +1,6 @@
+.git
+build
+cmake-build-debug
+cmake_install.cmake
+flash.c.old
+
