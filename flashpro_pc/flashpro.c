@@ -18,7 +18,7 @@
 #include <fcntl.h>
 #include <string.h>
 
-#define GETOPT_STRING "c:d:e:f:ghr:"
+#define GETOPT_STRING "c:d:e:f:ghmqr:"
 #define DEFAULT_DEVICE "/dev/ttyUSB0"
 #define STRING_BUFFER_SIZE 4096
 
@@ -102,6 +102,8 @@ void usage(char *name) {
 	printf(" - f: file path serving as input/output of write/read "
 		"commands\n");
 	printf(" - h: print help message\n");
+	printf(" - m: [DEBUG] print generated message\n");
+	printf(" - q: [DEBUG] print command queue\n");
 	printf(" - r: turn on readout after memory programming ('y') "
 		"or turn off ('n')\n");
 }
@@ -558,7 +560,19 @@ int add_command_write(
 }
 
 /* Generates formatted string with message with instructions for
- * programmer device ready to be sent to programmer device
+ * programmer device ready to be sent to programmer device.
+ * Message format is following:
+ * - starts with '{' and ends with '}'
+ * - inside are defined commands:
+ *   - 'e' for erase
+ *   - 'n' for endianness
+ *   - 'r' for read
+ *   - 'w' for write
+ * - most of them have arguments, such as eg. sector address
+ * - numbers are written in hex and end with '$'
+ * - byte data is written in hex
+ * - every command and argument has to end with semicolon ';'
+ * - whitespaces are irrelevant
  *
  * Returns 0 if succeeded and error value otherwise.
  *
@@ -637,12 +651,54 @@ int generate_message(
 	return 0;
 }
 
+/* Send message with commands to the device
+ *
+ * Returns 0 if succeeded and error value otherwise
+ *
+ * Arguments:
+ * message  : message with commands to be sent
+ * device   : path to device to which send the message
+ */
+int send_message(struct string *message, char* device) {
+
+	int fd, res;
+	int bytes_written = 0;
+	int bytes_to_write;
+
+	bytes_to_write = strlen(message->string);
+
+	/* Open device file */
+	fd = open(device, O_RDONLY);
+	if (fd < 0)
+		return ERROR_FILE_OPEN;
+	
+	/* Send complete message to the device*/
+	while (bytes_to_write) {
+		res = write(fd, message->string + bytes_written, bytes_to_write);
+		if (res < 0) {
+			if (errno != EINTR)
+				return res;
+		}
+		else {
+			bytes_written += res;
+			bytes_to_write -= res;
+		}
+	}
+
+	/* Close device file and return */
+	close(fd);
+	return 0;
+}
+
 /*
  * Main program function
  */
 int main(int argc, char** argv) {
 	
 	int c, res;
+	int print_message = 0;
+	int print_queue = 0;
+
 	char* command_str = NULL;
 	char *device = DEFAULT_DEVICE;
 	char* endianness_str = NULL;
@@ -670,6 +726,12 @@ int main(int argc, char** argv) {
 			case 'g':
 				printf("I'm a gummybear!\n");
 				exit(0x67756D);
+				break;
+			case 'm':
+				print_message = 1;
+				break;
+			case 'q':
+				print_queue = 1;
 				break;
 			case 'r':
 				readout_str = optarg;
@@ -724,18 +786,32 @@ int main(int argc, char** argv) {
 				printf("Invalid command: %c\n", *command_str);
 		}
 	}
+	/* Print error if no command provided */
 	else {
 		fprintf(stderr, "No command provided\n");
 		usage(argv[0]);
 		return 5;
 	}
 
-	print_command_queue(command_queue);
+	/* Print command queue if such option is set */
+	if (print_queue)
+		print_command_queue(command_queue);
+
+	/* Generate string with message */
 	if ((res = generate_message(command_queue, &message)))
 		error(res, argv[0]);
 
-	printf("%s\nsize: %d\n", message.string, message.size);
+	/* Print message if such option is set */
+	if (print_message)
+		printf("%s\nsize: %d\n", message.string, message.size);
 
+	/* Send message to device */
+	if ((res = send_message(&message, device)))
+		error(res, argv[0]);
+
+
+
+	/* Free allocated memory for command queue */
 	free_command_queue(command_queue);
 	return EXIT_SUCCESS;
 }
