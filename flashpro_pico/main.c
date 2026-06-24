@@ -224,15 +224,22 @@ int main() {
 	/* Initialize board and memory */
 	stdio_init_all();
 	stdio_usb_init();
+	stdio_set_translate_crlf(&stdio_usb, false);
 	flash_init();
 	
 	/* Wait a little for initialization */
 	sleep_ms(2000);
 	
+	fprintf(stderr, "This is a welcome message.\n");
+
 	while(2137) {
 	
 		/* Read character */
 		c = getchar();
+		gpio_put(25, 1);
+		putchar(c);
+		gpio_put(25, 0);
+		continue;
 		
 		/* Update previous state */
 		prev_state = state;

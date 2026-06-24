@@ -17,6 +17,7 @@
 
 #define ERASE_CHIP_COMMAND_SYMBOL     'e'
 #define ERASE_SECTOR_COMMAND_SYMBOL   's'
+#define READ_SECTOR_COMMAND_SYMBOL    'r'
 #define WRITE_SECTOR_COMMAND_SYMBOL   'w'
 #define SET_ENDIANNESS_COMMAND_SYMBOL 'n'
 
@@ -26,37 +27,6 @@
 #define COMMAND_ARG_ENDIANNESS_SYMBOL 'e'
 
 #define INT_END_SYMBOL                '$'
-
-/* Enum describing all program states */
-enum state_program {
-	/* Initial states */
-	s_init                  = 0x00,
-	s_data_frame            = 0x10,
-
-	/* Chip-erase command */
-	s_erase_chip            = 0x20,
-
-	/* Sector-erase command */
-	s_erase_sector          = 0x30,
-	s_erase_sector_address  = 0x31,
-
-	/* Write sector command */
-	s_write_sector          = 0x40,
-	s_write_sector_address  = 0x41,
-	s_write_sector_data     = 0x42,
-	s_write_sector_readout  = 0x43,
-
-	/* Read sector command */
-	s_read_sector           = 0x50,
-	s_read_sector_address   = 0x51,
-
-	/* Set endianness command */
-	s_set_endianness        = 0x80,
-	s_set_endianness_type   = 0x81,
-	
-	/* Syntax error state */
-	s_error                 = 0xff
-};
 
 /* Check if c is a whitespace
  *
@@ -99,7 +69,7 @@ int char_to_digit(int c) {
  * Arguments:
  * getchar  : pointer to function reading characters
  */
-int parse_int(int *getchar(void)) {
+int parse_int(int (*getchar)(void)) {
 
     int c;
     int value = 0;
@@ -107,7 +77,7 @@ int parse_int(int *getchar(void)) {
 
     do {
         /* Read character */
-        c = *getchar();
+        c = getchar();
         /* Skip white spaces */
         if (is_whitespace(c))
             continue;
@@ -234,7 +204,7 @@ void state_read_sector(char c, enum state_program *state) {
 					*state = s_data_frame;
 					break;
 				default:
-					*status = s_error;
+					*state = s_error;
 			}
 			break;
 		/* Read sector address argument */
@@ -270,7 +240,7 @@ void state_set_endianness(char c, enum state_program *state) {
 					*state = s_data_frame;
 					break;
 				default:
-					*status = s_error;
+					*state = s_error;
 			}
 			break;
 		/* Set endianness type argument */

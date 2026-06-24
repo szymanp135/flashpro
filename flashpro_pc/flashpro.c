@@ -17,9 +17,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
+#include <sys/wait.h>
 
 #define GETOPT_STRING "c:d:e:f:ghmqr:"
-#define DEFAULT_DEVICE "/dev/ttyUSB0"
+#define DEFAULT_DEVICE "/dev/ttyACM0"
 #define STRING_BUFFER_SIZE 4096
 
 #define MEMORY_SIZE 0x080000
@@ -38,7 +39,7 @@ struct string {
  * It is a part of polimorphism simulation.
  */
 enum command_type {
-	command_type_dummy,
+	command_type_dummy = 0,
 	command_type_erase,
 	command_type_read,
 	command_type_write,
@@ -130,6 +131,9 @@ void help(char *name) {
 #define ERROR_UNKNOWN_COMMAND 30
 #define ERROR_FILE_OPEN 100
 #define ERROR_NO_FILE 101
+#define ERROR_FILE_WRITE 102
+#define ERROR_DEVICE_OPEN 200
+#define ERROR_FORK 300
 
 /* Print error information with usage and exit program
  * This function defines its own error code scheme which is used by other
@@ -167,6 +171,15 @@ void error(int code, char* name) {
 			break;
 		case ERROR_NO_FILE:
 			fprintf(stderr, "No file provided.\n");
+			break;
+		case ERROR_FILE_WRITE:
+			fprintf(stderr, "Couldn't write to file.\n");
+			break;
+		case ERROR_DEVICE_OPEN:
+			fprintf(stderr, "Couldn't open device.\n");
+			break;
+		case ERROR_FORK:
+			fprintf(stderr, "Couldn't fork.\n");
 			break;
 		default:
 			fprintf(stderr, "Unknown error code: %d\n", code);
@@ -335,6 +348,45 @@ void print_command_queue(struct command_node *command_queue) {
 	}
 
 	printf("               NULL\n");
+}
+
+/* Set up tty device to properly format incoming data from pico
+ * Removes echo ("-echo") to not to receive sent data repeatedly and
+ * removes formatting with additional carrige return symbol ("raw").
+ *
+ * Returns 0 if succeeded and error value otherwise.
+ *
+ * Arguments:
+ * device   : path to device
+ */
+int setup_device_tty(char *device) {
+
+	int stat;
+	pid_t pid;
+	char *argv[] = { "/usr/bin/stty", "-F", "", "raw", "-echo", NULL };
+
+	/* Fork */
+	pid = fork();
+	if (pid < 0)
+		return ERROR_FORK;
+	
+	/* As a parent wait for child process */
+	if (pid) {
+		wait(&stat);
+		if (stat)
+			return ERROR_FORK;
+	}
+	/* As a child execute setting command */
+	else {
+		argv[2] = device;
+		execve(argv[0], argv, NULL);
+		/* program should not execute any code of old program after execv
+		 * while successful, thus reaching this section means error.
+		 */
+		exit(-1);
+	}
+
+	return 0;
 }
 
 /* Free allocated memory for command nodes in command queue
@@ -659,25 +711,20 @@ int generate_message(
  * message  : message with commands to be sent
  * device   : path to device to which send the message
  */
-int send_message(struct string *message, char* device) {
+int send_message(struct string *message, int fd) {
 
-	int fd, res;
+	int res;
 	int bytes_written = 0;
 	int bytes_to_write;
 
-	bytes_to_write = strlen(message->string);
+	bytes_to_write = strlen(message->string) + 1;
 
-	/* Open device file */
-	fd = open(device, O_RDONLY);
-	if (fd < 0)
-		return ERROR_FILE_OPEN;
-	
-	/* Send complete message to the device*/
+	/* Send complete message to the device */
 	while (bytes_to_write) {
 		res = write(fd, message->string + bytes_written, bytes_to_write);
 		if (res < 0) {
 			if (errno != EINTR)
-				return res;
+				return ERROR_FILE_WRITE;
 		}
 		else {
 			bytes_written += res;
@@ -685,27 +732,26 @@ int send_message(struct string *message, char* device) {
 		}
 	}
 
-	/* Close device file and return */
-	close(fd);
 	return 0;
 }
 
 /*
  * Main program function
  */
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
 	
 	int c, res;
+	int fd_device;
 	int print_message = 0;
 	int print_queue = 0;
 
-	char* command_str = NULL;
+	char *command_str = NULL;
 	char *device = DEFAULT_DEVICE;
-	char* endianness_str = NULL;
-	char* filepath = NULL;
-	char* readout_str = NULL;
+	char *endianness_str = NULL;
+	char *filepath = NULL;
+	char *readout_str = NULL;
 
-	struct command_node *command_queue;
+	struct command_node *command_queue = NULL;
 	struct string message = { 0 };
 
 	/* Parse program arguments */
@@ -803,13 +849,33 @@ int main(int argc, char** argv) {
 
 	/* Print message if such option is set */
 	if (print_message)
-		printf("%s\nsize: %d\n", message.string, message.size);
-
-	/* Send message to device */
-	if ((res = send_message(&message, device)))
+		printf("%s\nbuffer size: %d\n", message.string, message.size);
+	
+	/* Set up device with proper settings */
+	if ((res = setup_device_tty(device)))
 		error(res, argv[0]);
 
+	/* Open device */
+	fd_device = open(device, O_RDWR);
+	if (fd_device < 0)
+		error(ERROR_DEVICE_OPEN, argv[0]);
 
+	/* Send message to device */
+	if ((res = send_message(&message, fd_device)))
+		error(res, argv[0]);
+
+	ssize_t n;
+	while (0xff) {
+		char st[9] = { 0 };
+		n = read(fd_device, st, 8);
+		if (n > 0) {
+			st[n] = 0;
+			printf("%s", st);
+		}
+	}
+
+	/* Close device */
+	close(fd_device);
 
 	/* Free allocated memory for command queue */
 	free_command_queue(command_queue);

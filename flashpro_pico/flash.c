@@ -13,12 +13,6 @@
  * software.
  */
 
-#ifndef PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS
-#define PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS (500)
-#endif
-
-#include <stdio.h>
-#include "pico/stdlib.h"
 #include "flash.h"
 
 #define LED 25
@@ -46,15 +40,7 @@
 #define CE_LOW_PIN_MASK 1 << CE_LOW
 #define BUFFER_CLK_PIN_MASK 1 << BUFFER_CLK
 
-/* Variable indicating memory endianess used 
- * 0 for little endian / 1 for big endian
- * Global variable usage is justified by the increased ease of use and
- * legibility of code. Otherwise the value would be passed as an argument
- * in almost every function in the file despite not being used directly
- * by functions. As such the decision was taken to shamelessly use
- * a global variable.
- */
-char ENDIAN = 0;
+int ENDIAN = 0;
 
 /* Initialize gpios, turn on pull-ups on control pins, put appropriate
  * levels on gpios, set gpios directions
@@ -107,6 +93,9 @@ void flash_init(void) {
 
 	/* Initialize gpios */
 	flash_gpio_init();
+
+	/* Set endianness to default value (little-endianness) */
+	ENDIAN = 0;
 }
 
 /* Write 'value' to address low buffer 

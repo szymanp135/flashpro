@@ -5,7 +5,7 @@ include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 project(${PROJECT} C CXX ASM)
 pico_sdk_init()
 
-add_executable(${PROJECT} main.c flash.c command.c)
+add_executable(${PROJECT} main.c flash.c state.c)
 target_link_libraries(${PROJECT} pico_stdlib)
 
 pico_add_extra_outputs(${PROJECT})
