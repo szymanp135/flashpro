@@ -38,7 +38,7 @@ enum state_program {
 int is_whitespace(char);
 int char_to_digit(int);
 int parse_int(int (*)(void));
-int parse_data(uint8_t*);
+int parse_buffer(int(*)(void), uint8_t*);
 void state_erase_sector(char, enum state_program*);
 void state_write_sector(char, enum state_program*);
 void state_read_sector(char, enum state_program*);

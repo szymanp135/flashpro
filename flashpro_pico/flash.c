@@ -18,8 +18,6 @@
 #define LED 25
 
 #define SLEEP_TIME_US 5
-#define BUFFER_SIZE 2 * 4096
-#define MEMORY_ADDRESS_SPACE 0x0007FFFF
 
 #define D0 0
 #define A0 0
@@ -149,7 +147,7 @@ void flash_enable_address(uint32_t address) {
 	gpio_put(which, 0);
 
 	/* Turn on LED to indicate CE is low */
-	gpio_put(LED, 1);
+	//gpio_put(LED, 1);
 }
 
 /* Disables memory by driving CE pins high
@@ -164,7 +162,7 @@ void flash_disable_address(void) {
 		CE_HIGH_PIN_MASK | CE_LOW_PIN_MASK);
 
 	/* Turn off LED to indicate CE is back high */
-	gpio_put(LED, 0);
+	//gpio_put(LED, 0);
 }
 
 /* Put address and data byte onto pins and set WE to low for a period of
@@ -315,7 +313,7 @@ uint8_t flash_read_byte(uint32_t address) {
 }
 
 /* Write data buffer into sector.
- * data buffer has to match its size with BUFFER_SIZE
+ * data buffer has to match its size with SECTOR_SIZE
  *
  * SECTOR HAS TO BE ERASED BEFORE WRITING
  *
@@ -330,13 +328,13 @@ void flash_write_sector(uint32_t address, uint8_t* data) {
 	uint32_t i;
 	uint32_t sector = address & 0xfffff000;
 
-	for (i = 0; i < BUFFER_SIZE; ++i) {
+	for (i = 0; i < SECTOR_SIZE; ++i) {
 		flash_write_byte(sector | i, data[i]);
 	}
 }
 
 /* Read sector data into data buffer
- * data buffer has to match its size with BUFFER_SIZE
+ * data buffer has to match its size with SECTOR_SIZE
  *
  * Returns nothing
  *
@@ -349,7 +347,7 @@ void flash_read_sector(uint32_t address, uint8_t* data) {
 	uint32_t i;
 	uint32_t sector = address & 0xfffff000;
 
-	for (i = 0; i < BUFFER_SIZE; ++i) {
+	for (i = 0; i < SECTOR_SIZE; ++i) {
 		data[i] = flash_read_byte(sector | i);
 	}
 }

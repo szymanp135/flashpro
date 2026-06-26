@@ -839,6 +839,12 @@ int communicate_device(int fd, struct command_node *node) {
 	 * Then send them to device and wait for response. 
 	 */
 	while (node) {
+		/* Skip dummy nodes */
+		if (node->type == command_type_dummy) {
+			node = node->next_command;
+			continue;
+		}
+
 		/* Empty message string */
 		message.string[0] = 0;
 
@@ -852,7 +858,7 @@ int communicate_device(int fd, struct command_node *node) {
 		if ((res = receive_message(&received_message, fd)))
 			return res;
 
-		printf("%s\n", received_message.string);
+		printf("receive:\n%s\n", received_message.string);
 
 		/* Change node to next one */
 		node = node->next_command;

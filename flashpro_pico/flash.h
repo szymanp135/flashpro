@@ -18,7 +18,7 @@
 #include <stdint.h>
 #include "pico/stdlib.h"
 
-#define BUFFER_SIZE 2 * 4096
+#define SECTOR_SIZE 2 * 4096
 #define MEMORY_ADDRESS_SPACE 0x0007FFFF
 
 /* Global variable

@@ -15,6 +15,8 @@
 
 #include "state.h"
 
+#define NIBBLE_SIZE 4
+
 #define ERASE_CHIP_COMMAND_SYMBOL     'e'
 #define ERASE_SECTOR_COMMAND_SYMBOL   's'
 #define READ_SECTOR_COMMAND_SYMBOL    'r'
@@ -27,6 +29,8 @@
 #define COMMAND_ARG_ENDIANNESS_SYMBOL 'e'
 
 #define INT_END_SYMBOL                '$'
+#define BUFFER_START_SYMBOL           '['
+#define BUFFER_END_SYMBOL             ']'
 
 /* Check if c is a whitespace
  *
@@ -36,7 +40,7 @@
  * c        : character to be checked
  */
 int is_whitespace(char c) {
-	return c == ' ' || c == '\t' || c == '\n';
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
 /* Convert character to hexadecimal digit value.
@@ -51,9 +55,9 @@ int char_to_digit(int c) {
     if (c >= '0' && c <= '9')
         return c - '0';
     if (c >= 'a' && c <= 'f')
-        return c - 'a';
+        return c - 'a' + 10;
     if (c >= 'A' && c <= 'F')
-        return c - 'A';
+        return c - 'A' + 10;
 
     return -1;
 }
@@ -101,7 +105,69 @@ int parse_int(int (*getchar)(void)) {
     } while (c != INT_END_SYMBOL);
 }
 
-int parse_data(uint8_t *data) {
+/* Parse text and read buffer byte data encoded in hex.
+ * Reads BUFFER_START_SYMBOL, then reads characters until
+ * BUFFER_END_SYMBOL sign is read.
+ *
+ * Returns 0 if succeeded and error value otherwise:
+ * 1 if buffer start is invalid
+ * 2 if invalid digit was read
+ *
+ * Arguments:
+ * getchar  : pointer to function reading characters
+ * data     : pointer to buffer to where to store parsed data
+ */
+int parse_buffer(int (*getchar)(void), uint8_t *data) {
+
+	int c = 0;
+	uint8_t byte_value = 0;
+	int digit_num = NIBBLE_SIZE;
+	int digit_value;
+
+	/* Skip preceding white spaces and read BUFFER_START_SYMBOL */
+	while (02137) {
+		/* Read character */
+		c = getchar();
+		/* Skip whitespaces */
+		if (is_whitespace(c))
+			continue;
+		/* Continue function if start symbol was read */
+		if (c == BUFFER_START_SYMBOL)
+			break;
+		/* Other characters are not welcome */
+		return 1;
+	}
+
+	/* Read data, convert to buffer byte data and write to buffer */
+	while (0x2137) {
+		/* Read character */
+		c = getchar();
+		/* Check if character is not a buffer end symbol */
+		if (c == BUFFER_END_SYMBOL)
+			break;
+		/* Convert character to integer value */
+		digit_value = char_to_digit(c);
+		/* Check if it was a valid digit */
+		if (digit_value < 0)
+			return 2;
+		/* Update byte value with read digit */
+		byte_value |= digit_value << digit_num;
+
+		/* If digit_num is 0 then whole byte has been acquired
+		 * and is read to be written to buffer
+		 */
+		if (!digit_num) {
+			/* Write byte to buffer */
+			*(data++) = byte_value;
+			/* Reset byte value */
+			byte_value = 0;
+		}
+
+		/* Change digit number */
+		digit_num = NIBBLE_SIZE - digit_num;
+	}
+
+	return 0;
 }
 
 /* Helper function to shorten state_char function. It does the same as
@@ -272,7 +338,7 @@ void state_handle_char(char c, enum state_program *state) {
 
 	switch (*state & 0xf0) {
 		/* Init state */
-		case s_init: *state = c == '{' ? s_data_frame : s_error; break;
+		case s_init: *state = c == '{' ? s_data_frame : s_init; break;
 		/* Data frame state */
 		case s_data_frame:
 			switch (c) {
@@ -286,6 +352,8 @@ void state_handle_char(char c, enum state_program *state) {
 					*state = s_read_sector; break;
 				case SET_ENDIANNESS_COMMAND_SYMBOL:
 					*state = s_set_endianness; break;
+				case '}':
+					*state = s_init; break;
 				default: *state = s_error;
 			}
 			break;

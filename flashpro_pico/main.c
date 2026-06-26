@@ -16,6 +16,39 @@
 #include "flash.h"
 #include "state.h"
 
+/* Sends to PC information that the device finished processing command
+ * and finished with success.
+ * Message is formatted to be somewhat human readable (is divided per
+ * lines and has indentations)
+ *
+ * Returns nothing
+ *
+ * No arguments
+ */
+void send_ok(enum state_program state) {
+	printf("{\n\tk %02x$;\n}\n", state);
+}
+
+/* Sends to PC data from data array.
+ * Message is formatted to be somewhat human readable (is divided per
+ * lines and has indentations)
+ *
+ * Returns nothing
+ *
+ * Arguments:
+ * data     : array with data to be sent
+ */
+void send_sector(uint8_t *data) {
+	
+	int i;
+
+	printf("{\n\td\n\t\td [");
+	for (i = 0; i < SECTOR_SIZE; ++i) {
+		printf("%02x", data[i]);
+	}
+	printf("];\t\n;\n}\n");
+}
+
 /* Erase whole chip
  *
  * Returns nothing
@@ -48,18 +81,16 @@ int erase_sector(int32_t address) {
  *
  * Arguments:
  * address  : address contained by sector to be read
+ * buffer   : buffer for read data
  */
-int read_sector(int32_t address) {
+int read_sector(int32_t address, uint8_t *buffer) {
 	
-	uint8_t data[BUFFER_SIZE];
-
 	if (address < 0)
 		return 1;
 	
-	/* Read data from sector */
-	flash_read_sector(address, data);
-	/* Print data */
-	flash_print_buffer(data, BUFFER_SIZE);
+	/* Read data from sector to buffer */
+	flash_read_sector(address, buffer);
+
 	return 0;
 }
 
@@ -81,7 +112,7 @@ int read_sector(int32_t address) {
 int write_sector(int32_t address, uint8_t *data, int readout) {
 	
 	int i;
-	uint8_t check_data[BUFFER_SIZE];
+	uint8_t check_data[SECTOR_SIZE];
 
 	if (address < 0)
 		return 1;
@@ -100,7 +131,7 @@ int write_sector(int32_t address, uint8_t *data, int readout) {
 		/* Read data from sector */
 		flash_read_sector(address, check_data);
 		/* Iterate through data and compare */
-		for (i = 0; i < BUFFER_SIZE; ++i) {
+		for (i = 0; i < SECTOR_SIZE; ++i) {
 			if (data[i] ^ check_data[i]) {
 				return 0x8000 | i;
 			}
@@ -143,11 +174,11 @@ int set_endianness(int endianness) {
 int handle_state(enum state_program state, enum state_program prev_state) {
 
 	/* Static variables to be remembered across different function calls */
-	static int32_t address           = -1;
-	static uint8_t data[BUFFER_SIZE] = { 0 };
-	static uint8_t *data_pointer     = 0;
-	static int readout               = -1;
-	static int endianness            = -1;
+	static int32_t address                  = -1;
+	static uint8_t sector_data[SECTOR_SIZE] = { 0 };
+	static uint8_t *sector_data_pointer     = 0;
+	static int readout                      = -1;
+	static int endianness                   = -1;
 
 	int res = 0;
 	
@@ -158,28 +189,34 @@ int handle_state(enum state_program state, enum state_program prev_state) {
 		switch (prev_state) {
 			case s_init:
 				address = readout = endianness = -1;
-				data_pointer = 0;
+				sector_data_pointer = 0;
 			case s_data_frame:
 				break;
 			case s_erase_chip:
 				erase_chip();
+				send_ok(state);
 				break;
 			case s_erase_sector:
 				res = erase_sector(address);
 				address = -1;
+				send_ok(state);
 				break;
 			case s_write_sector:
-				res = write_sector(address, data_pointer, readout);
+				res = write_sector(address, sector_data_pointer, readout);
 				address = readout = -1;
-				data_pointer = 0;
+				sector_data_pointer = 0;
+				send_ok(state);
 				break;
 			case s_read_sector:
-				res = read_sector(address);
+				res = read_sector(address, sector_data);
 				address = -1;
+				send_sector(sector_data);
+				send_ok(state);
 				break;
 			case s_set_endianness:
 				res = set_endianness(endianness);
 				endianness = -1;
+				send_ok(state);
 				break;
 		}
 	}   
@@ -194,7 +231,7 @@ int handle_state(enum state_program state, enum state_program prev_state) {
 				break;
 			/* Data argument */
 			case s_write_sector_data:
-				parse_data(data_pointer = data);
+				parse_buffer(*getchar, sector_data_pointer = sector_data);
 				break;
 			/* Readout argument */
 			case s_write_sector_readout:
@@ -217,7 +254,7 @@ int main() {
 	/* This 'state' variable describes state in which program
 	 * currently is
 	 */
-	enum state_program state = 0;
+	enum state_program state = s_init;
 	/* Program's state of previous character */
 	enum state_program prev_state;
 	    
@@ -230,17 +267,11 @@ int main() {
 	/* Wait a little for initialization */
 	sleep_ms(2000);
 	
-	fprintf(stderr, "This is a welcome message.\n");
-
 	while(2137) {
 	
 		/* Read character */
 		c = getchar();
-		gpio_put(25, 1);
-		putchar(c);
-		gpio_put(25, 0);
-		continue;
-		
+
 		/* Update previous state */
 		prev_state = state;
 		
@@ -249,6 +280,11 @@ int main() {
 		
 		/* Execute action associated with state */
 		handle_state(state, prev_state);
+
+		if (state == s_error) {
+			gpio_put(25, 1);
+			break;
+		}
 	}
 	
 	return 0;
