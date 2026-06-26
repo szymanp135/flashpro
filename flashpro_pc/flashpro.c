@@ -18,6 +18,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <time.h>
 
 #define GETOPT_STRING "c:d:e:f:ghmqr:"
 #define DEFAULT_DEVICE "/dev/ttyACM0"
@@ -132,6 +133,7 @@ void help(char *name) {
 #define ERROR_FILE_OPEN 100
 #define ERROR_NO_FILE 101
 #define ERROR_FILE_WRITE 102
+#define ERROR_FILE_READ 103
 #define ERROR_DEVICE_OPEN 200
 #define ERROR_FORK 300
 
@@ -175,6 +177,9 @@ void error(int code, char* name) {
 		case ERROR_FILE_WRITE:
 			fprintf(stderr, "Couldn't write to file.\n");
 			break;
+		case ERROR_FILE_READ:
+			fprintf(stderr, "Couldn't read from file.\n");
+			break;
 		case ERROR_DEVICE_OPEN:
 			fprintf(stderr, "Couldn't open device.\n");
 			break;
@@ -187,6 +192,39 @@ void error(int code, char* name) {
 
 	usage(name);
 	exit(code);
+}
+
+/* Hang program execution for some time in nano seconds
+ *
+ * Returns 0 if succeeded and error value otherwise.
+ *
+ * Arguments:
+ * ns       : nano seconds to sleep
+ */
+int sleep_ns(long int ns) {
+	
+	int res;
+	struct timespec to_sleep  = { 0 };
+	struct timespec remaining = { 0 };
+
+	to_sleep.tv_sec = ns / 1000000000;
+	to_sleep.tv_nsec = ns % 1000000000;
+
+	/* Loop till program has slept enough */
+	while(2137) {
+		res = nanosleep(&to_sleep, &remaining);
+		/* If sleep was interrupted then try again with remaining time */
+		if (res && errno == EINTR) {
+			to_sleep.tv_sec = remaining.tv_sec;
+			to_sleep.tv_nsec = remaining.tv_nsec;
+		}
+		/* Error */
+		else if (res)
+			return res;
+		/* Program has slept well for desired amount of time */
+		else
+			return 0;
+	}
 }
 
 /* Append string with appendage to create an appendaged string
@@ -363,7 +401,7 @@ int setup_device_tty(char *device) {
 
 	int stat;
 	pid_t pid;
-	char *argv[] = { "/usr/bin/stty", "-F", "", "raw", "-echo", NULL };
+	char *argv[] = { "/usr/bin/stty", "-F", "", "raw", "-echo", "115200", NULL };
 
 	/* Fork */
 	pid = fork();
@@ -611,11 +649,10 @@ int add_command_write(
 	return 0;
 }
 
-/* Generates formatted string with message with instructions for
- * programmer device ready to be sent to programmer device.
- * Message format is following:
- * - starts with '{' and ends with '}'
- * - inside are defined commands:
+/* Generates formatted string with message with single command ready
+ * to be sent to device.
+ * Commands have following format:
+ * - available defined commands:
  *   - 'e' for erase
  *   - 'n' for endianness
  *   - 'r' for read
@@ -640,65 +677,53 @@ int generate_message(
 	int i, res;
 	char formatted[256];
 
-	/* Write command set opening sign */
-	if((res = string_append(message, "{\n")))
-		return res;
-
-	while(node) {
-		switch (node->type) {
-			/* Write command node */
-			case command_type_write:
-				sprintf(formatted,
-					"\tw\n\t\ta %x$;\n\t\tr %x$;\n\t\td [",
-					((struct command_node_write*)node)->sector_address,
-					((struct command_node_write*)node)->readout);
+	/* Depending on node type generate appropriate message */
+	switch (node->type) {
+		/* Write command node */
+		case command_type_write:
+			sprintf(formatted,
+				"\tw\n\t\ta %x$;\n\t\tr %x$;\n\t\td [",
+				((struct command_node_write*)node)->sector_address,
+				((struct command_node_write*)node)->readout);
+			if ((res = string_append(message, formatted)))
+				return res;
+			for (i = 0; i < SECTOR_SIZE; ++i) {
+				sprintf(formatted, "%x",
+					((struct command_node_write*)node)->sector_data[i]
+				);
 				if ((res = string_append(message, formatted)))
 					return res;
-				for (i = 0; i < SECTOR_SIZE; ++i) {
-					sprintf(formatted, "%x",
-						((struct command_node_write*)node)->sector_data[i]
-					);
-					if ((res = string_append(message, formatted)))
-						return res;
-				}
-				if ((res = string_append(message, "];\n\t;\n")))
-					return res;
-				break;
-			/* Read command node */
-			case command_type_read:
-				sprintf(formatted, "\tr\n\t\ta %x$;\n\t;\n",
-					((struct command_node_read*)node)->sector_address);
-				if ((res = string_append(message, formatted)))
-					return res;
-				break;
-			/* Erase command node */
-			case command_type_erase:
-				if ((res = string_append(message, "\te;\n")))
-					return res;
-				break;
-			/* Endianness command node */
-			case command_type_endianness:
-				sprintf(formatted, "\tn\n\t\te %x$;\n\t;\n",
-					((struct command_node_endianness*)node)->endianness);
-				if ((res = string_append(message, formatted)))
-					return res;
-				break;
-			/* Dummy command node */
-			case command_type_dummy:
-				break;
-			/* Unknown command */
-			default:
-				return ERROR_UNKNOWN_COMMAND;
-				break;
-		}
-
-		/* Change node to next one in queue */
-		node = node->next_command;
+			}
+			if ((res = string_append(message, "];\n\t;\n")))
+				return res;
+			break;
+		/* Read command node */
+		case command_type_read:
+			sprintf(formatted, "\tr\n\t\ta %x$;\n\t;\n",
+				((struct command_node_read*)node)->sector_address);
+			if ((res = string_append(message, formatted)))
+				return res;
+			break;
+		/* Erase command node */
+		case command_type_erase:
+			if ((res = string_append(message, "\te;\n")))
+				return res;
+			break;
+		/* Endianness command node */
+		case command_type_endianness:
+			sprintf(formatted, "\tn\n\t\te %x$;\n\t;\n",
+				((struct command_node_endianness*)node)->endianness);
+			if ((res = string_append(message, formatted)))
+				return res;
+			break;
+		/* Dummy command node */
+		case command_type_dummy:
+			break;
+		/* Unknown command */
+		default:
+			return ERROR_UNKNOWN_COMMAND;
+			break;
 	}
-
-	/* Write command set closing sign */
-	if((res = string_append(message, "}\n")))
-		return res;
 
 	return 0;
 }
@@ -717,7 +742,7 @@ int send_message(struct string *message, int fd) {
 	int bytes_written = 0;
 	int bytes_to_write;
 
-	bytes_to_write = strlen(message->string) + 1;
+	bytes_to_write = strlen(message->string);
 
 	/* Send complete message to the device */
 	while (bytes_to_write) {
@@ -736,13 +761,126 @@ int send_message(struct string *message, int fd) {
 }
 
 /*
+ *
+ *
+ */
+#define FIRST_READ_RETRY_COUNT 3000
+#define FOLLOWING_READ_RETRY_COUNT 100
+int receive_message(struct string *received_message, int fd) {
+
+	int res;
+	int retry = FIRST_READ_RETRY_COUNT;
+	ssize_t n;
+	char received[256];
+
+	/* Read until there is no more data */
+	while (retry) {
+		n = read(fd, received, 255);
+		/* If data was read then append it to string */
+		if (n >= 0) {
+			received[n] = 0;
+			if ((res = string_append(received_message, received)))
+				return res;
+			retry = FOLLOWING_READ_RETRY_COUNT;
+		}
+		/* If no data read decrement retry count */
+		else if (errno == EAGAIN) {
+			retry--;
+		}
+		/* Handle error */
+		else
+			return ERROR_FILE_READ;
+
+		/* Wait 1 µs for data */
+		sleep_ns(1000);
+	}
+
+	return 0;
+}
+
+/* Handles communication between computer and device. Sends to device
+ * message opening symbol, then sends commands one by one and awaits for
+ * response after every command. Closes message with closing symbol.
+ * Message format is following:
+ * - starts with '{' and ends with '}'
+ * - inside are defined commands:
+ *   - 'e' for erase
+ *   - 'n' for endianness
+ *   - 'r' for read
+ *   - 'w' for write
+ * - most of them have arguments, such as eg. sector address
+ * - numbers are written in hex and end with '$'
+ * - byte data is written in hex
+ * - every command and argument has to end with semicolon ';'
+ * - whitespaces are irrelevant
+ *
+ * Returns 0 if succeeded and error value otherwise.
+ *
+ * Arguments:
+ * fd       : file descriptor of device file
+ * node     : command queue first node
+ */
+int communicate_device(int fd, struct command_node *node) {
+
+	int res;
+	struct string message = { 0 };
+	struct string received_message = { 0 };
+
+	char message_open[]  = "{\n";
+	char message_close[] = "}\n";
+
+	/* Send message opening */
+	if ((res = string_append(&message, message_open)))
+		return res;
+	if ((res = send_message(&message, fd)))
+		return res;
+
+	/* Iterate through command nodes and translate them into messages.
+	 * Then send them to device and wait for response. 
+	 */
+	while (node) {
+		/* Empty message string */
+		message.string[0] = 0;
+
+		/* Generate message string upon command node */
+		if ((res = generate_message(node, &message)))
+			return res;
+		/* Send message to device */
+		if ((res = send_message(&message, fd)))
+			return res;
+		/* Receive response message from device */
+		if ((res = receive_message(&received_message, fd)))
+			return res;
+
+		printf("%s\n", received_message.string);
+
+		/* Change node to next one */
+		node = node->next_command;
+	}
+	
+	/* Send message closing */
+	message.string[0] = 0;
+	if ((res = string_append(&message, message_close)))
+		return res;
+	if ((res = send_message(&message, fd)))
+		return res;
+	
+	/* Free memory allocated for strings */
+	if (message.string)
+		free(message.string);
+	if (received_message.string)
+		free(received_message.string);
+
+	return 0;
+}
+
+/*
  * Main program function
  */
 int main(int argc, char **argv) {
 	
 	int c, res;
 	int fd_device;
-	int print_message = 0;
 	int print_queue = 0;
 
 	char *command_str = NULL;
@@ -752,7 +890,6 @@ int main(int argc, char **argv) {
 	char *readout_str = NULL;
 
 	struct command_node *command_queue = NULL;
-	struct string message = { 0 };
 
 	/* Parse program arguments */
 	while((c = getopt(argc, argv, GETOPT_STRING)) != -1) {
@@ -774,7 +911,7 @@ int main(int argc, char **argv) {
 				exit(0x67756D);
 				break;
 			case 'm':
-				print_message = 1;
+				//print_message = 1;
 				break;
 			case 'q':
 				print_queue = 1;
@@ -844,24 +981,28 @@ int main(int argc, char **argv) {
 		print_command_queue(command_queue);
 
 	/* Generate string with message */
-	if ((res = generate_message(command_queue, &message)))
-		error(res, argv[0]);
+	/*if ((res = generate_message(command_queue, &message)))
+		error(res, argv[0]);*/
 
 	/* Print message if such option is set */
-	if (print_message)
-		printf("%s\nbuffer size: %d\n", message.string, message.size);
+	/*if (print_message)
+		printf("%s\nbuffer size: %d\n", message.string, message.size);*/
 	
 	/* Set up device with proper settings */
 	if ((res = setup_device_tty(device)))
 		error(res, argv[0]);
 
 	/* Open device */
-	fd_device = open(device, O_RDWR);
+	fd_device = open(device, O_RDWR | O_NONBLOCK);
 	if (fd_device < 0)
 		error(ERROR_DEVICE_OPEN, argv[0]);
 
+	/* Communicate with device - send messages and receive responses */
+	if ((res = communicate_device(fd_device, command_queue)))
+		error(res, argv[0]);
+
 	/* Send message to device */
-	if ((res = send_message(&message, fd_device)))
+	/*if ((res = send_message(&message, fd_device)))
 		error(res, argv[0]);
 
 	ssize_t n;
@@ -872,7 +1013,7 @@ int main(int argc, char **argv) {
 			st[n] = 0;
 			printf("%s", st);
 		}
-	}
+	}*/
 
 	/* Close device */
 	close(fd_device);
