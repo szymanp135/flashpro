@@ -206,6 +206,8 @@ int add_command_write(
 
 	/* Convert readout string to integer value */
 	readout = str_to_readout(readout_str);
+	if (readout < 0)
+		return ERROR_READOUT_STR;
 
 	/* Check if file was even given */
 	if (!filepath)

@@ -186,76 +186,12 @@ int generate_message(
 	return 0;
 }
 
-/* Send message with commands to the device
- *
- * Returns 0 if succeeded and error value otherwise
- *
- * Arguments:
- * message  : message with commands to be sent
- * device   : path to device to which send the message
- */
-int send_message(struct string *message, int fd) {
-
-	int res;
-	int bytes_written = 0;
-	int bytes_to_write;
-
-	bytes_to_write = strlen(message->string);
-
-	/* Send complete message to the device */
-	while (bytes_to_write) {
-		res = write(fd, message->string + bytes_written, bytes_to_write);
-		if (res < 0) {
-			if (errno != EINTR)
-				return ERROR_FILE_WRITE;
-		}
-		else {
-			bytes_written += res;
-			bytes_to_write -= res;
-		}
-	}
-
-	return 0;
-}
-
 /*
  *
  *
+ *
+ *
  */
-#define FIRST_READ_RETRY_COUNT 30000
-#define FOLLOWING_READ_RETRY_COUNT 100
-int receive_message(struct string *received_message, int fd) {
-
-	int res;
-	int retry = FIRST_READ_RETRY_COUNT;
-	ssize_t n;
-	char received[256];
-
-	/* Read until there is no more data */
-	while (retry) {
-		n = read(fd, received, 255);
-		/* If data was read then append it to string */
-		if (n >= 0) {
-			received[n] = 0;
-			if ((res = string_append(received_message, received)))
-				return res;
-			retry = FOLLOWING_READ_RETRY_COUNT;
-		}
-		/* If no data read decrement retry count */
-		else if (errno == EAGAIN) {
-			retry--;
-		}
-		/* Handle error */
-		else
-			return ERROR_FILE_READ;
-
-		/* Wait 1 µs for data */
-		sleep_ns(1000);
-	}
-
-	return 0;
-}
-
 int process_received_message(struct string *response) {
 	return 0;
 }
@@ -444,6 +380,8 @@ int main(int argc, char **argv) {
 				break;
 			/* Write memory command */
 			case 'w':
+				if (!readout_str)
+					error(ERROR_NO_READOUT_STR, argv[0], &usage);
 				if ((res = add_command_write(
 						&command_queue,
 						filepath,
