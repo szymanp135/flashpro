@@ -7,8 +7,8 @@ NAME=flashpro
 .PHONY:
 	clean all
 
-${NAME}: ${NAME}.c
-	${CC} ${FLAGS} -o ${NAME} ${NAME}.c ${LIB}
+${NAME}: ${NAME}.c command.c util.c string.c error.c
+	${CC} ${FLAGS} -o ${NAME} ${NAME}.c command.c util.c string.c error.c ${LIB}
 
 clean:
 	rm ${NAME}
