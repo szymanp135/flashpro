@@ -195,7 +195,7 @@ void state_erase_sector(char c, enum state_program *state) {
 		case s_erase_sector_address:
 			/* ';' is expected as an end of command since argument
 			 * should be read and processed earlier */
-			if (c == ';') *state = s_erase_sector; break;
+			if (c == ';') { *state = s_erase_sector; break; }
 			*state = s_error;
 			break;
 		/* Other states are forbidden (how they even got here?) */
@@ -239,7 +239,7 @@ void state_write_sector(char c, enum state_program *state) {
 		case s_write_sector_address:
 		case s_write_sector_data:
 		case s_write_sector_readout:
-			if (c == ';') *state = s_write_sector; break;
+			if (c == ';') { *state = s_write_sector; break; }
 			*state = s_error;
 			break;
 		/* Other states are forbidden (how they even got here?) */
@@ -275,7 +275,7 @@ void state_read_sector(char c, enum state_program *state) {
 			break;
 		/* Read sector address argument */
 		case s_read_sector_address:
-			if (c == ';') *state = s_read_sector; break;
+			if (c == ';') { *state = s_read_sector; break; }
 			*state = s_error;
 			break;
 		/* Other states are forbidden (how they even got here?) */
@@ -311,7 +311,7 @@ void state_set_endianness(char c, enum state_program *state) {
 			break;
 		/* Set endianness type argument */
 		case s_set_endianness_type:
-			if (c == ';') *state = s_set_endianness; break;
+			if (c == ';') { *state = s_set_endianness; break; }
 			*state = s_error;
 			break;
 		/* Other states are forbidden (how they even got here?) */
@@ -359,7 +359,7 @@ void state_handle_char(char c, enum state_program *state) {
 			break;
 		/* Erase chip state*/
 		case s_erase_chip:
-			if (c == ';') *state = s_data_frame; break;
+			if (c == ';') { *state = s_data_frame; break; }
 			*state = s_error;
 			break;
 		/* Erase sector state*/

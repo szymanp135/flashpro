@@ -10,6 +10,7 @@
 #define ERROR_READOUT_STR        -20
 #define ERROR_NO_READOUT_STR     -21
 #define ERROR_UNKNOWN_COMMAND    -30
+#define ERROR_WRONG_STATE        -40
 #define ERROR_FILE_OPEN         -100
 #define ERROR_NO_FILE           -101
 #define ERROR_FILE_WRITE        -102

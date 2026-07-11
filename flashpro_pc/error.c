@@ -31,6 +31,9 @@ void error(int code, char* name, void (*usage)(char *)) {
 		case ERROR_UNKNOWN_COMMAND:
 			fprintf(stderr, "Unknown command.\n");
 			break;
+		case ERROR_WRONG_STATE:
+			fprintf(stderr, "State machine entered invalid state.\n");
+			break;
 		case ERROR_FILE_OPEN:
 			fprintf(stderr, "Couldn't open file.\n");
 			break;

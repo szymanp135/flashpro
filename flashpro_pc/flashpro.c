@@ -21,9 +21,10 @@
 
 #include "constants.h"
 #include "command.h"
+#include "error.h"
+#include "state.h"
 #include "string.h"
 #include "util.h"
-#include "error.h"
 
 #define GETOPT_STRING "c:d:e:f:ghmpqr:"
 #define DEFAULT_DEVICE "/dev/ttyACM0"
@@ -193,13 +194,52 @@ int generate_message(
  *
  *
  */
-int process_received_message(struct string *response, uint8_t *memory) {
+int process_received_message(
+	struct string *response,
+	int *address,
+	uint8_t *buffer
+	) {
 	
-	int i = 0;
-	int c;
+	int value;
+	char *c;
+	enum state_program state = s_init;
 
-	while((c = response->string[i++])) {
-		/* change state upon c character */
+	/* Initialize c - current character pointer */
+	c = response->string;
+
+	while(*(c++)) {
+		/* Skip white spaces */
+		if (is_whitespace(*c))
+			continue;
+
+		/* Change state upon character under c */
+		state_handle_char(*c, &state);
+
+		printf("state: %02x; char: %02x ('%c')\n", state, *c, *c);
+
+		/* Execute an action upon state if necessary */
+		switch(state) {
+			/* Idle states */
+			case s_init:
+			case s_data_frame:
+			case s_data:
+				break;
+			/* Ok reponse value */
+			case s_ok:
+				value = parse_int(&c);
+				break;
+			/* Data response address */
+			case s_data_address:
+				*address = parse_int(&c);
+				break;
+			/* Data response data array */
+			case s_data_data:
+				parse_buffer(&c, buffer);
+				break;
+			/* Other state values indicate error */
+			default:
+				return ERROR_WRONG_STATE;
+		}
 	}
 
 	return 0;
@@ -238,8 +278,10 @@ int communicate_with_device(
 	int print_progress
 	) {
 	
-	int fd, res, command_count, current_command = 0, i = 0;
+	int fd, res, address, i = 0;
+	int command_count, current_command = 0;
 	char progress_bar[PROGRESS_BAR_LENGTH + 1] = { 0 };
+	uint8_t buffer[SECTOR_SIZE];
 	uint8_t read_memory[MEMORY_SIZE];
 	struct string send_message_string = { 0 };
 	struct string receive_message_string = { 0 };
@@ -323,7 +365,8 @@ int communicate_with_device(
 		/* Process received response */
 		if ((res = process_received_message(
 				&receive_message_string,
-				read_memory
+				&address,
+				buffer
 			)))
 			return res;
 
