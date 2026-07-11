@@ -205,9 +205,9 @@ int process_received_message(
 	enum state_program state = s_init;
 
 	/* Initialize c - current character pointer */
-	c = response->string;
+	c = response->string - 1;
 
-	while(*(c++)) {
+	while(*(++c)) {
 		/* Skip white spaces */
 		if (is_whitespace(*c))
 			continue;

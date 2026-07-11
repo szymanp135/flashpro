@@ -2,8 +2,8 @@
 
 #define NIBBLE_SIZE 4
 
-#define OK_RESPONSE_SYMBOL          'e'
-#define DATA_RESPONSE_SYMBOL        's'
+#define OK_RESPONSE_SYMBOL          'k'
+#define DATA_RESPONSE_SYMBOL        'd'
 
 #define RESPONSE_ARG_ADDRESS_SYMBOL 'a'
 #define RESPONSE_ARG_DATA_SYMBOL    'd'
@@ -61,7 +61,7 @@ int parse_int(char **text) {
 
     do {
         /* Read character */
-        c = *(*text++);
+        c = *(++(*text));
         /* Skip white spaces */
         if (is_whitespace(c))
             continue;
@@ -83,6 +83,8 @@ int parse_int(char **text) {
             value = (value << 4) | digit;
 
     } while (c != INT_END_SYMBOL);
+
+	return value;
 }
 
 /* Parse text and read buffer byte data encoded in hex.
@@ -107,7 +109,7 @@ int parse_buffer(char **text, uint8_t *data) {
 	/* Skip preceding white spaces and read BUFFER_START_SYMBOL */
 	while (02137) {
 		/* Read character */
-		c = *(*text++);
+        c = *(++(*text));
 		/* Skip whitespaces */
 		if (is_whitespace(c))
 			continue;
@@ -121,7 +123,7 @@ int parse_buffer(char **text, uint8_t *data) {
 	/* Read data, convert to buffer byte data and write to buffer */
 	while (0x2137) {
 		/* Read character */
-		c = *(*text++);
+        c = *(++(*text));
 		/* Check if character is not a buffer end symbol */
 		if (c == BUFFER_END_SYMBOL)
 			break;
@@ -183,7 +185,7 @@ void state_handle_char(char c, enum state_program *state) {
 			break;
 		/* Ok response state */
 		case s_ok:
-			if (c == ';') *state = s_data_frame; break;
+			if (c == ';') { *state = s_data_frame; break; }
 			*state = s_error;
 			break;
 		/* Data response state */
@@ -196,7 +198,7 @@ void state_handle_char(char c, enum state_program *state) {
 							*state = s_data_address;
 							break;
 						case RESPONSE_ARG_DATA_SYMBOL:
-							*state s_data_data;
+							*state = s_data_data;
 							break;
 						case ';':
 							*state = s_data_frame;
