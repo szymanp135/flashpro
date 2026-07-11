@@ -25,7 +25,7 @@
 #include "util.h"
 #include "error.h"
 
-#define GETOPT_STRING "c:d:e:f:ghmqr:"
+#define GETOPT_STRING "c:d:e:f:ghmpqr:"
 #define DEFAULT_DEVICE "/dev/ttyACM0"
 
 /* Print usage information
@@ -47,8 +47,9 @@ void usage(char *name) {
 	printf(" - f: file path serving as input/output of write/read "
 		"commands\n");
 	printf(" - h: print help message\n");
-	printf(" - m: [DEBUG] print generated message\n");
-	printf(" - q: [DEBUG] print command queue\n");
+	printf(" - m: [DEBUG] print generated messages\n");
+	printf(" - p: [DEBUG] print command queue\n");
+	printf(" - q: quiet output\n");
 	printf(" - r: turn on readout after memory programming ('y') "
 		"or turn off ('n')\n");
 }
@@ -192,7 +193,15 @@ int generate_message(
  *
  *
  */
-int process_received_message(struct string *response) {
+int process_received_message(struct string *response, uint8_t *memory) {
+	
+	int i = 0;
+	int c;
+
+	while((c = response->string[i++])) {
+		/* change state upon c character */
+	}
+
 	return 0;
 }
 
@@ -217,22 +226,53 @@ int process_received_message(struct string *response) {
  * Returns 0 if succeeded and error value otherwise.
  *
  * Arguments:
- * devicepath   : string with device file path
- * node         : command queue first node
- * print_message: whether to print message sent to device
+ * devicepath       : string with device file path
+ * node             : command queue first node
+ * print_message    : whether to print message sent to device
+ * print_progress   : whether to print progress of commands execution
  */
 int communicate_with_device(
 	char *devicepath,
 	struct command_node *node,
-	int print_message
+	int print_message,
+	int print_progress
 	) {
 	
-	int fd, res;
+	int fd, res, command_count, current_command = 0, i = 0;
+	char progress_bar[PROGRESS_BAR_LENGTH + 1] = { 0 };
+	uint8_t read_memory[MEMORY_SIZE];
 	struct string send_message_string = { 0 };
 	struct string receive_message_string = { 0 };
 	struct string command_message_string = { 0 };
 
+	/* If progress is to be printed then count up commands in queue
+	 * and reset progress bar */
+	if (print_progress) {
+		command_count = count_commands(node);
+		printf("\n");
+		memset(progress_bar, ' ', PROGRESS_BAR_LENGTH);
+	}
+
 	while (node) {
+		/* If progress is to be printed then print the progress */
+		if (print_progress) {
+			/* Update current command index */
+			++current_command;
+			/* Go to previous line and clear it */
+			printf("\033[1A\r\033[2K\r");
+			/* Update progress_bar */
+			for (; i < PROGRESS_BAR_LENGTH * current_command / command_count; ++i)
+				progress_bar[i] = '#';
+			/* Print progress info */
+			printf("Progress: [%s] %2d/%d    Executing command: %s\n",
+				progress_bar,
+				current_command,
+				command_count,
+				command_type_string[node->type - command_type_dummy]
+			);
+			fflush(stdout);
+		}
+
 		/* Skip dummy nodes */
 		if (node->type == command_type_dummy) {
 			node = node->next_command;
@@ -281,7 +321,10 @@ int communicate_with_device(
 		close(fd);
 
 		/* Process received response */
-		if ((res = process_received_message(&receive_message_string)))
+		if ((res = process_received_message(
+				&receive_message_string,
+				read_memory
+			)))
 			return res;
 
 		/* Move to the next node */
@@ -304,6 +347,7 @@ int main(int argc, char **argv) {
 	int c, res;
 	int print_queue = 0;
 	int print_message = 0;
+	int print_progress = 1;
 
 	char *command_str = NULL;
 	char *device = DEFAULT_DEVICE;
@@ -335,8 +379,11 @@ int main(int argc, char **argv) {
 			case 'm':
 				print_message = 1;
 				break;
-			case 'q':
+			case 'p':
 				print_queue = 1;
+				break;
+			case 'q':
+				print_progress = 0;
 				break;
 			case 'r':
 				readout_str = optarg;
@@ -413,7 +460,8 @@ int main(int argc, char **argv) {
 	if ((res = communicate_with_device(
 			device,
 			command_queue,
-			print_message
+			print_message,
+			print_progress
 		)))
 		error(res, argv[0], &usage);
 

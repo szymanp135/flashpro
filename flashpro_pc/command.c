@@ -1,5 +1,14 @@
 #include "command.h"
 
+/* Command types string representations */
+char *command_type_string[] = {
+	"Dummy",
+	"Erase",
+	"Read",
+	"Write",
+	"Set Endianness"
+};
+
 /* Print nodes int command queue
  *
  * Returns nothing
@@ -273,5 +282,24 @@ int add_command_write(
 	close(fd);
 
 	return 0;
+}
+
+/* Count command nodes in queue
+ *
+ * Returns node count in queue
+ *
+ * Arguments:
+ * node     : command queue head node
+ */
+int count_commands(struct command_node *node) {
+	
+	int count = 0;
+
+	while (node) {
+		count++;
+		node = node->next_command;
+	}
+
+	return count;
 }
 

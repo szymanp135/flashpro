@@ -22,6 +22,8 @@ enum command_type {
 	command_type_endianness
 };
 
+extern char *command_type_string[];
+
 /* Following stucts are definitions of flashpro commands executed on
  * programmer device. They are made simulating polimorphism - abstract
  * type of 'command' is used to determine command type based on 'type'
@@ -67,6 +69,7 @@ int add_command_read(struct command_node **);
 int add_command_write(struct command_node **, char *, char *);
 void free_command_queue(struct command_node *);
 void print_command_queue(struct command_node *);
+int count_commands(struct command_node *);
 
 #endif
 
