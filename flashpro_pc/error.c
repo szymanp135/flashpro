@@ -34,6 +34,12 @@ void error(int code, char* name, void (*usage)(char *)) {
 		case ERROR_WRONG_STATE:
 			fprintf(stderr, "State machine entered invalid state.\n");
 			break;
+		case ERROR_WRONG_DEVICE_STATE:
+			fprintf(stderr, "Device state machine entered invalid state.\n");
+			break;
+		case ERROR_NO_READ_BUFFER_ADDRESS:
+			fprintf(stderr, "No addres given for read buffer.\n");
+			break;
 		case ERROR_FILE_OPEN:
 			fprintf(stderr, "Couldn't open file.\n");
 			break;

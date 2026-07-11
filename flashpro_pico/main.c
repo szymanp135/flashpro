@@ -38,11 +38,11 @@ void send_ok(enum state_program state) {
  * Arguments:
  * data     : array with data to be sent
  */
-void send_sector(uint8_t *data) {
+void send_sector(uint8_t *data, int32_t sector_address) {
 	
 	int i;
 
-	printf("{\n\td\n\t\td [");
+	printf("{\n\td\n\t\ta %08x$;\n\t\td [", sector_address);
 	for (i = 0; i < SECTOR_SIZE; ++i) {
 		printf("%02x", data[i]);
 	}
@@ -209,8 +209,8 @@ int handle_state(enum state_program state, enum state_program prev_state) {
 				break;
 			case s_read_sector:
 				res = read_sector(address, sector_data);
+				send_sector(sector_data, address);
 				address = -1;
-				send_sector(sector_data);
 				send_ok(state);
 				break;
 			case s_set_endianness:
