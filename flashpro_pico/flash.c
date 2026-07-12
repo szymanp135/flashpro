@@ -245,7 +245,7 @@ void flash_sector_erase(uint32_t address) {
 	flash_put_byte((0x5555 << 1) | 0x0, 0x80);
 	flash_put_byte((0x5555 << 1) | 0x0, 0xAA);
 	flash_put_byte((0x2AAA << 1) | 0x0, 0x55);
-	flash_put_byte((sector << 1) | 0x0, 0x30);
+	flash_put_byte( sector       | 0x0, 0x30);
 
 	/* Erase high memory sector */
 	flash_put_byte((0x5555 << 1) | 0x1, 0xAA);
@@ -253,7 +253,7 @@ void flash_sector_erase(uint32_t address) {
 	flash_put_byte((0x5555 << 1) | 0x1, 0x80);
 	flash_put_byte((0x5555 << 1) | 0x1, 0xAA);
 	flash_put_byte((0x2AAA << 1) | 0x1, 0x55);
-	flash_put_byte((sector << 1) | 0x1, 0x30);
+	flash_put_byte( sector       | 0x1, 0x30);
 
 	/* Wait 25ms for command to finish */
 	sleep_ms(25);
