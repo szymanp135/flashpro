@@ -225,5 +225,3 @@ void state_handle_char(char c, enum state_program *state) {
 	}
 }
 
-
-

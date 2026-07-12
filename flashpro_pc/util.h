@@ -11,11 +11,15 @@
 
 #define FIRST_READ_RETRY_COUNT 30000
 #define FOLLOWING_READ_RETRY_COUNT 100
+#define PRINT_ARRAY_LINE_LENGTH 0x10
+#define PRINT_ARRAY_LINE_MASK PRINT_ARRAY_LINE_LENGTH - 1
 
 int sleep_ns(long int);
 
 int str_to_readout(char *);
 int str_to_endianness(char *);
+
+void print_array(uint8_t *, int);
 
 int read_data(int, uint8_t *, int);
 

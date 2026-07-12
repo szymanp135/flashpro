@@ -279,11 +279,13 @@ int main() {
 		state_handle_char(c, &state);
 		
 		/* Execute action associated with state */
-		handle_state(state, prev_state);
+		if (handle_state(state, prev_state))
+			state = s_error;
 		
 		//printf("char: %02x; prev state: %02x; state: %02x\n", c, prev_state, state);
 
 		if (state == s_error) {
+			send_ok(state);
 			gpio_put(25, 1);
 			break;
 		}

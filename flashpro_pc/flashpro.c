@@ -69,64 +69,6 @@ void help(char *name) {
 	/* TODO: write meaningful help */
 }
 
-/* Print data array of given length
- *
- * Returns nothing
- *
- * Arguments:
- * data		: buffer with data to be printed
- * length	: data buffer's length
- */
-#define LINE_LENGTH 0x10
-void print_array(uint8_t* data, int length) {
-	
-	int i, j;
-	int is_repeating_pattern;
-	int prev_pattern[LINE_LENGTH] = { 0 };
-	int skip_line_print = 0;
-
-	printf("\nMemory contents:");
-
-	/* Reset pattern array */
-	memset(prev_pattern, -1, sizeof(prev_pattern));
-
-	for (i = 0; i < length; ++i) {
-		/* For each new line to be printed check if every character is
-		 * the same as the previous character. If it is then skip the line.
-		 * Otherwise print the line address info */
-		if (!(i & 0x0f)) {
-			/* Reset repeating character info */
-			is_repeating_pattern = 1;
-			/* Scan line whether is has different characters */
-			for (j = 0; j < LINE_LENGTH; ++j)
-				if (prev_pattern[j] != data[i + j]) {
-					is_repeating_pattern = 0;
-					skip_line_print = 0;
-					break;
-				}
-			/* If characters are repeating then skip printing the line */
-			if (is_repeating_pattern) {
-				i += j - 1;
-				if (!skip_line_print) {
-					printf("\n       ... (repeating as above)");
-					skip_line_print = 1;
-				}
-				continue;
-			}
-			/* Print line address */
-			printf("\n%05X:", i);
-		}
-
-		/* Print array content */
-		printf(" %02X", data[i]);
-		/* Update previous character */
-		prev_pattern[i & 0x0f] = data[i];
-	}
-
-	printf("\n");
-}
-
-
 /* Set up tty device to properly format incoming data from pico
  * Removes echo ("-echo") to not to receive sent data repeatedly and
  * removes formatting with additional carrige return symbol ("raw").
@@ -206,7 +148,7 @@ int generate_message(
 			if ((res = string_append(message, formatted)))
 				return res;
 			for (i = 0; i < SECTOR_SIZE; ++i) {
-				sprintf(formatted, "%x",
+				sprintf(formatted, "%02x",
 					((struct command_node_write*)node)->sector_data[i]
 				);
 				if ((res = string_append(message, formatted)))
@@ -431,6 +373,9 @@ int communicate_with_device(
 				buffer
 			)))
 			return res;
+
+		/*if (current_command < 4)
+			printf("receive:\n%s\n", receive_message_string.string);*/
 
 		/* If command was a read then save read buffer into memory array */
 		if (node->type == command_type_read) {
